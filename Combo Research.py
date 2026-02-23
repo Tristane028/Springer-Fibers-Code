@@ -234,4 +234,30 @@ for C_index, matrix in enumerate(schubert_cells):
         for row in matrix:
             print(row)
 
+    # --- Compute Chi * C product ---
+    # Convert modified matrix to SymPy
+    C_sym_list = []
+    for row in matrix:
+        new_row = []
+        for val in row:
+            if isinstance(val, str) and val.startswith('a'):
+                if val not in symbol_dict:
+                    symbol_dict[val] = sp.symbols(val)
+                new_row.append(symbol_dict[val])
+            else:
+                new_row.append(val)
+        C_sym_list.append(new_row)
+    
+    C_sym = sp.Matrix(C_sym_list)
+    Chi_sym = sp.Matrix(J)
+    
+    product = Chi_sym * C_sym
 
+    # Zero out rows where Chi has all zeros
+    for r in range(Chi_sym.rows):
+        if all(Chi_sym[r, c] == 0 for c in range(Chi_sym.cols)):
+            for c in range(product.cols):
+                product[r, c] = 0
+
+    print("\nChi * C product (symbolic):")
+    sp.pprint(product)
