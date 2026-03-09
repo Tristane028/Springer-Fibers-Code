@@ -1,263 +1,194 @@
 from itertools import permutations
 import numpy as np
-import sympy as sp
+import sympy as sp # For symbolic computations (used in Mathematica)
 
 #The following line is for running the script on my computer specifically, omit this line when running this
 #/usr/local/bin/python3.9 "/Users/christan065/Springer Fibers/Combo Research.py"
 
-lambda_func = lambda d: list(range(1, int(d) + 1))
+# Young Tableau: reversed digits, each row has d columns.
+def young_tableaux_from_digits(num_str):
+    return [list(range(1, int(d)+1)) for d in reversed(num_str)]
 
-def create_matrix(num_str):
-    """
-    Creates a matrix where each digit represents the number of columns in each row.
-    """
-    matrix = [lambda_func(d) for d in reversed(num_str)]
-    return matrix
-
-
-# Ask user for input
-num_str = input("Enter the number string: ")
-result = create_matrix(num_str)
-
-
-# Calculate the sum of digits
-n = sum(int(digit) for digit in num_str)
-def nilpotent_jordan_from_digits(num_str):
-    """
-    Create a nilpotent Jordan matrix where each digit of num_str
-    corresponds to a Jordan block of that size.
-   
-    Example:
-        num_str = 221  -> blocks of sizes [2, 2, 1]
-    """
-    digits = [int(d) for d in str(num_str)]
+# Nilpotent Jordan matrix with blocks given by digits.
+def jordan_from_digits(num_str):
+    digits = [int(d) for d in num_str]
     n = sum(digits)
-   
     J = np.zeros((n, n), dtype=int)
-   
     idx = 0
     for k in digits:
-        for i in range(k - 1):
-            J[idx + i, idx + i + 1] = 1
+        for i in range(k-1):
+            J[idx+i, idx+i+1] = 1
         idx += k
-   
-    return J
-J = nilpotent_jordan_from_digits(num_str)
-print(J)
-# Create a flattened matrix and fill by column
-numbers = list(range(1, n + 1))
-filled_matrix = [row[:] for row in result]
-col_idx = 0
-num_idx = 0
+    return sp.Matrix(J)
 
-
-for col in range(max(len(row) for row in filled_matrix)):
-    for row in range(len(filled_matrix)):
-        if col < len(filled_matrix[row]) and num_idx < n:
-            filled_matrix[row][col] = numbers[num_idx]
-            num_idx += 1
-
-
-
+# Check if a matrix is a valid Young tableau (columns strictly increase and no duplicates in columns)
 def is_valid_matrix(matrix):
     for col in range(len(matrix[0])):
-        column_values = [matrix[row][col] for row in range(len(matrix)) if col < len(matrix[row])]
-        if sorted(column_values) != column_values or len(set(column_values)) != len(column_values):
+        col_vals = [matrix[r][col] for r in range(len(matrix)) if col < len(matrix[r])]
+        if sorted(col_vals) != col_vals or len(col_vals) != len(set(col_vals)):
             return False
     return True
 
-
+# Verify columns are strictly increasing (for Schubert cells, we want columns to be strictly increasing)
 def is_column_increasing(matrix):
-    max_cols = max(len(row) for row in matrix)
-    for col in range(max_cols):
-        for row in range(1, len(matrix)):
-            if col < len(matrix[row]) and col < len(matrix[row - 1]):
-                if matrix[row][col] <= matrix[row - 1][col]:
+    max_cols = max(len(r) for r in matrix)
+    for c in range(max_cols):
+        for r in range(1, len(matrix)):
+            if c < len(matrix[r]) and c < len(matrix[r-1]):
+                if matrix[r][c] <= matrix[r-1][c]:
                     return False
     return True
 
-
-def generate_matrices(filled_matrix, n):
-    unique_numbers = list(range(1, n + 1))
-    for perm in permutations(unique_numbers):
-        new_matrix = []
-        start_index = 0
-        for row in filled_matrix:
-            new_row = list(perm[start_index:start_index + len(row)])
-            new_matrix.append(new_row)
-            start_index += len(row)
-       
-
-generate_matrices(filled_matrix, n)
+# Counts number of inversions (if b is below and to the left of a, and b<a, that's an inversion)
 def count_inversions(matrix):
-    """
-    Count inversions in the matrix:
-    1. Same row: b left of a, b > a
-    2. Different rows: c below d, c in column left of d, c < d
-    """
-    inversions = 0
-   
-    # Flatten matrix with position info: (value, row, col)
-    positions = []
-    for row_idx, row in enumerate(matrix):
-        for col_idx, val in enumerate(row):
-            positions.append((val, row_idx, col_idx))
-   
-    # Count inversions
-    for i in range(len(positions)):
-        for j in range(i + 1, len(positions)):
-            val_i, row_i, col_i = positions[i]
-            val_j, row_j, col_j = positions[j]
-           
-            # Same row: i is to left of j and val_i > val_j
-            if row_i == row_j and col_i < col_j and val_i > val_j:
-                inversions += 1
-           
-            # Different rows: j below i, j in column left of i, val_j < val_i
-            if row_j > row_i and col_j < col_i and val_j < val_i:
-                inversions += 1
-   
-    return inversions
+    pos = [(val, r, c) for r,row in enumerate(matrix) for c,val in enumerate(row)]
+    inv = 0
+    for i in range(len(pos)):
+        for j in range(i+1, len(pos)):
+            vi,ri,ci = pos[i]
+            vj,rj,cj = pos[j]
+            if ri==rj and ci<cj and vi>vj: inv+=1
+            if rj>ri and cj<ci and vj<vi: inv+=1
+    return inv
 
+# Generate all valid fillings of the Young tableau shape.
+def generate_valid_fillings(tableaux):
+    n = sum(len(r) for r in tableaux)
+    nums = list(range(1,n+1))
+    valid = []
+    for perm in permutations(nums):
+        m = []
+        idx = 0
+        for row in tableaux:
+            m.append(list(perm[idx:idx+len(row)]))
+            idx += len(row)
+        if is_valid_matrix(m) and is_column_increasing(m):
+            valid.append(m)
+    return valid
 
-def generate_matrices(filled_matrix, n):
-    unique_numbers = list(range(1, n + 1))
-    for perm in permutations(unique_numbers):
-        new_matrix = []
-        start_index = 0
-        for row in filled_matrix:
-            new_row = list(perm[start_index:start_index + len(row)])
-            new_matrix.append(new_row)
-            start_index += len(row)
-        if is_valid_matrix(new_matrix) and is_column_increasing(new_matrix):
-            print("\nValid matrix:")
-            for row in new_matrix:
-                print(row)
-            inv_count = count_inversions(new_matrix)
-            print(f"Inversions: {inv_count}")
+# Convert valid fillings to Schubert cell matrices (1 for positions of numbers, 0 elsewhere)
+def fillings_to_schubert_cells(valid):
+    cells = []
+    for mat in valid:
+        flat = [v for row in mat for v in row]
+        n = len(flat)
+        S = [[0]*n for _ in range(n)]
+        for col,val in enumerate(flat):
+            S[val-1][col] = 1
+        cells.append(S)
+    return cells
 
-
-generate_matrices(filled_matrix, n)
-# Collect matrices by inversion count
-max_inversions = 0
-matrices_by_inversions = {}
-
-
-unique_numbers = list(range(1, n + 1))
-for perm in permutations(unique_numbers):
-    new_matrix = []
-    start_index = 0
-    for row in filled_matrix:
-        new_row = list(perm[start_index:start_index + len(row)])
-        new_matrix.append(new_row)
-        start_index += len(row)
-    if is_valid_matrix(new_matrix) and is_column_increasing(new_matrix):
-        inv_count = count_inversions(new_matrix)
-        max_inversions = max(max_inversions, inv_count)
-        if inv_count not in matrices_by_inversions:
-            matrices_by_inversions[inv_count] = []
-        matrices_by_inversions[inv_count].append(new_matrix)
-
-
-# Print results
-for i in range(max_inversions + 1):
-    print(f"\na{i} (matrices with {i} inversions):")
-    if i in matrices_by_inversions:
-        print("\n")
-        for matrix in matrices_by_inversions[i]:
-            for row in matrix:
-                print(row)
-            print("\n")
-
-
-temporary = []
-
-
-for i in range(max_inversions + 1):
-    if i in matrices_by_inversions:
-        for matrix in matrices_by_inversions[i]:
-            matrix_string = ""
-            for row in matrix:
-                for value in row:
-                    matrix_string += str(value)
-            temporary.append(matrix_string)
-
-
-schubert_cells = []
-
-
-for string in temporary:
-    n = len(string)
-    matrix = [[0] * n for _ in range(n)]
-   
-    for col, char in enumerate(string):
-        row = int(char) - 1
-        matrix[row][col] = 1
-   
-    schubert_cells.append(matrix)
-
-# After all schubert_cells are processed and symbolic 'a's added
-
-print("Schubert Cells and Chi * C products:")
-
-for C_index, matrix in enumerate(schubert_cells):
-    print(f"\nMatrix {C_index + 1}:")
-    for row in matrix:
-        print(row)
-    
-    violations = []
-
-    # Find positions where free symbolic values are needed
-    for row_idx in range(len(matrix)):
-        for col_idx in range(len(matrix[row_idx])):
-            if matrix[row_idx][col_idx] == 0:
-                has_left = any(matrix[row_idx][c] == 1 for c in range(col_idx))
-                has_above = any(matrix[r][col_idx] == 1 for r in range(row_idx))
+# Insert free a-variables not hit by the "death rays of 1"
+def fill_symbolic_entries(cell):
+    a_symbols = {}
+    idx = 1
+    M = [row[:] for row in cell]
+    for r in range(len(M)):
+        for c in range(len(M)):
+            if M[r][c] == 0:
+                has_left = any(M[r][cc]==1 for cc in range(c))
+                has_above = any(M[rr][c]==1 for rr in range(r))
                 if not has_left and not has_above:
-                    violations.append((row_idx, col_idx))
+                    name = f"a{idx}"
+                    M[r][c] = name
+                    a_symbols[name] = sp.symbols(name)
+                    idx += 1
+    return M, a_symbols
 
-    # Fill in symbolic 'a' values
-    symbol_dict = {}
-    for idx, (row_idx, col_idx) in enumerate(violations):
-        symbol_name = f"a{idx + 1}"
-        matrix[row_idx][col_idx] = symbol_name
-        symbol_dict[symbol_name] = sp.symbols(symbol_name)
+# Span Checking function for each column of XC against C (tracking new relations among a-variables).
+def springer_span_checks(C_sym, XC_sym):
+    a_vars = sorted(
+        {s for s in C_sym.free_symbols if s.name.startswith("a")},
+        key=lambda x: int(x.name[1:])
+    )
+    relations = {}
+    results = []
 
-    if violations:
-        print(f"\nMatrix {C_index + 1} violations at positions: {violations}")
-        print("Modified matrix:")
-        for row in matrix:
-            print(row)
-    else:
-        print(f"\nMatrix {C_index + 1}: No violations")
-        print("Modified matrix (no changes):")
-        for row in matrix:
-            print(row)
+    for i in range(C_sym.cols):
+        C_sub = C_sym.subs(relations)
+        XC_sub = XC_sym.subs(relations)
+        C_cols = C_sub[:, :i+1]
+        target = XC_sub[:, i]
 
-    # --- Compute Chi * C product ---
-    # Convert modified matrix to SymPy
-    C_sym_list = []
-    for row in matrix:
-        new_row = []
-        for val in row:
-            if isinstance(val, str) and val.startswith('a'):
-                if val not in symbol_dict:
-                    symbol_dict[val] = sp.symbols(val)
-                new_row.append(symbol_dict[val])
-            else:
-                new_row.append(val)
-        C_sym_list.append(new_row)
-    
-    C_sym = sp.Matrix(C_sym_list)
-    Chi_sym = sp.Matrix(J)
-    
-    product = Chi_sym * C_sym
+        alphas = sp.symbols(f"alpha0:{i+1}")
+        unknowns = list(alphas) + a_vars
+        eqs = list(C_cols*sp.Matrix(alphas) - target)
+        sol = sp.solve(eqs, unknowns, dict=True)
 
-    # Zero out rows where Chi has all zeros
-    for r in range(Chi_sym.rows):
-        if all(Chi_sym[r, c] == 0 for c in range(Chi_sym.cols)):
-            for c in range(product.cols):
-                product[r, c] = 0
+        if not sol:
+            results.append(("NO", {}))
+            continue
 
-    print("\nChi * C product (symbolic):")
-    sp.pprint(product)
+        s = sol[0]
+        new_rel = {}
+        for v in a_vars:
+            if v in s:
+                expr = s[v]
+                if any(a in expr.free_symbols for a in alphas):
+                    new_rel[v] = "free"
+                else:
+                    new_rel[v] = expr
+
+        for k,v in new_rel.items():
+            if v!="free":
+                relations[k]=v
+
+        results.append(("YES", new_rel))
+
+    constrained = set(relations.keys())
+    free_vars = [v for v in a_vars if v not in constrained]
+    return results, free_vars, relations
+
+num_str = input("Enter number string: ")
+tableaux = young_tableaux_from_digits(num_str)
+J = jordan_from_digits(num_str)
+
+valid = generate_valid_fillings(tableaux)
+cells = fillings_to_schubert_cells(valid)
+
+print("\n=== Schubert Cells and Springer Span Checks ===")
+
+for idx, cell in enumerate(cells, start=1):
+    print(f"\n--- Cell {idx} ---")
+    for row in cell: print(row)
+
+    # Insert a-variables
+    M, a_dict = fill_symbolic_entries(cell)
+
+    print("\nWith symbolic entries:")
+    for row in M: print(row)
+
+    # Implement symbolic matrix multiplication to get Chi-C matrix
+    C_sym = sp.Matrix([
+        [a_dict.get(val,val) for val in row]
+        for row in M
+    ])
+    XC_sym = J * C_sym
+
+    # Zero out rows where J is zero
+    for r in range(J.rows):
+        if all(J[r,c]==0 for c in range(J.cols)):
+            for c in range(XC_sym.cols):
+                XC_sym[r,c] = 0
+
+    print("\nChi * C:")
+    sp.pprint(XC_sym)
+
+    # Checks Span (whether columns of Chi-C can be written as a linear combination of all columns leading up to column position in Chi-C)
+    checks, free_vars, relations = springer_span_checks(C_sym, XC_sym)
+
+    print("\nSpringer Span Checks:")
+    print("{:<8} {:<8} {:<30}".format("Check","Y/N","Relations"))
+    print("-"*40)
+    for i,(yn,new_rel) in enumerate(checks, start=1):
+        if new_rel:
+            rel = ", ".join(
+                f"{k}=free" if v=="free" else f"{k}={v}"
+                for k,v in new_rel.items()
+            )
+        else:
+            rel = "None"
+        print("{:<8} {:<8} {:<30}".format(i, yn, rel))
+
+    print("\nFinal Free Vars:", ", ".join(str(v) for v in free_vars))
+    print("Final Relations:", ", ".join(f"{k}={v}" for k,v in relations.items()))
